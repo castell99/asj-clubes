@@ -1,0 +1,281 @@
+/* ============================================
+   VARIABLES GLOBALES DE DISEÑO
+   Paleta: azul marino profundo + naranja energético
+   Tipografía: Syne (títulos) + DM Sans (cuerpo)
+   ============================================ */
+:root {
+  --azul-oscuro: #0f172a;    /* Fondo principal */
+  --azul-medio: #1e293b;     /* Tarjetas y paneles */
+  --azul-borde: #334155;     /* Bordes sutiles */
+  --naranja: #f97316;        /* Acento principal */
+  --naranja-suave: #fed7aa;  /* Texto sobre oscuro */
+  --verde: #22c55e;          /* Estados positivos */
+  --rojo: #ef4444;           /* Alertas */
+  --amarillo: #eab308;       /* Advertencias */
+  --texto: #e2e8f0;          /* Texto principal */
+  --texto-suave: #94a3b8;    /* Texto secundario */
+  --blanco: #ffffff;
+}
+
+/* Reset base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Fondo global de la app */
+body {
+  background-color: var(--azul-oscuro);
+  color: var(--texto);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Títulos usan la fuente display */
+h1, h2, h3, h4 {
+  font-family: 'Syne', sans-serif;
+}
+
+/* ── LAYOUT PRINCIPAL ── */
+.app-wrapper {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
+}
+
+/* Encabezado de la aplicación */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 28px 0 32px;
+  border-bottom: 1px solid var(--azul-borde);
+  margin-bottom: 32px;
+}
+
+.app-header .logo-icono {
+  width: 48px;
+  height: 48px;
+  background: var(--naranja);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.app-header h1 {
+  font-size: 26px;
+  color: var(--blanco);
+  letter-spacing: -0.5px;
+}
+
+.app-header p {
+  font-size: 13px;
+  color: var(--texto-suave);
+  margin-top: 2px;
+}
+
+/* Navegación por pestañas */
+.nav-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 32px;
+  background: var(--azul-medio);
+  padding: 6px;
+  border-radius: 14px;
+  width: fit-content;
+}
+
+.nav-tab {
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--texto-suave);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-tab:hover {
+  color: var(--texto);
+  background: var(--azul-borde);
+}
+
+/* Pestaña activa */
+.nav-tab.activo {
+  background: var(--naranja);
+  color: var(--blanco);
+  font-weight: 600;
+}
+
+/* ── TARJETAS ── */
+.card {
+  background: var(--azul-medio);
+  border: 1px solid var(--azul-borde);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+/* ── INPUTS ── */
+.input-base {
+  width: 100%;
+  background: var(--azul-oscuro);
+  border: 1px solid var(--azul-borde);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: var(--texto);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.input-base:focus {
+  border-color: var(--naranja);
+}
+
+.input-base::placeholder {
+  color: var(--texto-suave);
+}
+
+/* ── BOTONES ── */
+.btn-primario {
+  background: var(--naranja);
+  color: var(--blanco);
+  border: none;
+  border-radius: 10px;
+  padding: 11px 22px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.btn-primario:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.btn-secundario {
+  background: var(--azul-borde);
+  color: var(--texto);
+  border: none;
+  border-radius: 10px;
+  padding: 11px 22px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-secundario:hover {
+  background: #475569;
+}
+
+/* ── BADGES / ETIQUETAS ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-naranja { background: rgba(249,115,22,0.18); color: var(--naranja); }
+.badge-verde   { background: rgba(34,197,94,0.15);  color: var(--verde); }
+.badge-azul    { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.badge-gris    { background: var(--azul-borde);     color: var(--texto-suave); }
+.badge-amarillo{ background: rgba(234,179,8,0.15);  color: var(--amarillo); }
+
+/* ── TABLA ── */
+.tabla-wrapper {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--azul-borde);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead {
+  background: rgba(249,115,22,0.08);
+}
+
+th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+td {
+  padding: 12px 16px;
+  font-size: 13px;
+  border-top: 1px solid var(--azul-borde);
+  vertical-align: middle;
+}
+
+tr:hover td {
+  background: rgba(255,255,255,0.02);
+}
+
+/* ── GRID ESTADÍSTICAS ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: var(--azul-medio);
+  border: 1px solid var(--azul-borde);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-card .numero {
+  font-family: 'Syne', sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--naranja);
+  line-height: 1;
+}
+
+.stat-card .etiqueta {
+  font-size: 13px;
+  color: var(--texto-suave);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .nav-tabs {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .nav-tab {
+    flex: 1;
+    text-align: center;
+  }
+}
