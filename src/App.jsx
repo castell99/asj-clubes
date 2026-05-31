@@ -156,6 +156,7 @@ export default function App() {
           <FormularioAgregar
             apiUrl={API_URL}
             clubes={clubesData}
+            todosParticipantes={participantes}
             onGuardado={cargarParticipantes} // Refresca los datos tras guardar
           />
         )}
