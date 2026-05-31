@@ -67,11 +67,12 @@ export default function FormularioAgregar({ apiUrl, clubes, todosParticipantes =
       const nuevo = { ...prev, [campo]: valor };
 
       // Sugerir etapa cuando cambia la edad
+      // Siempre actualiza el selector automáticamente,
+      // el usuario puede cambiarlo manualmente después si necesita
       if (campo === 'edad_actual') {
         const sugerencia = edadAEtapa(valor);
         setEtapaSugerida(sugerencia);
-        // Autocompletar etapa si aún no fue elegida manualmente
-        if (sugerencia && !prev.etapa) {
+        if (sugerencia) {
           nuevo.etapa = sugerencia;
         }
       }
