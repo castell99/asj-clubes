@@ -129,7 +129,7 @@ export function getEtapaColor(etapa) {
 // Ej: "Jiménez" → "jimenez"
 // ─────────────────────────────────────────────────────────────
 export function normalizarTexto(texto) {
-  return (texto || '')
+  return String(texto ?? '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
