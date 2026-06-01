@@ -149,6 +149,8 @@ export default function App() {
           <BuscadorParticipante
             participantes={participantes}
             clubes={clubesData}
+            apiUrl={API_URL}
+            onActualizar={cargarParticipantes}
           />
         )}
 
