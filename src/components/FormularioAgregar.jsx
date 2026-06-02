@@ -1,486 +1,305 @@
 // ============================================================
-// FormularioAgregar.jsx — con sugerencias inteligentes
+// BuscadorParticipante.jsx
 // ============================================================
-// Formulario para agregar participantes u oficiales.
-// A medida que se rellena:
-//   - La edad sugiere automáticamente la etapa de vida
-//   - Al tener etapa + jornada + zona, sugiere clubes compatibles
-//     ordenados por cercanía, igual que el recomendador
+// Busca participantes por nombre, apellido o código.
+// Muestra el perfil completo con opciones de:
+//   - Reasignar club (recomendador inteligente)
+//   - Eliminar participante (con confirmación)
 
 import React, { useState, useMemo } from 'react';
-import { filtrarClubesCompatibles, getEtapaColor } from '../utils/clubUtils';
+import { buscarParticipantes, getEtapaColor } from '../utils/clubUtils';
+import RecomendadorClub from './RecomendadorClub';
 
-// ── Mapa de edad → etapa de vida ──
-// Dado un número de edad, devuelve la etapa correspondiente
-function edadAEtapa(edad) {
-  const n = parseInt(edad, 10);
-  if (isNaN(n)) return '';
-  if (n <= 3)  return '2-3 Años';
-  if (n <= 5)  return '4-5 Años';
-  if (n <= 9)  return '6-9 Años';
-  if (n <= 14) return '10-14 Años';
-  if (n <= 18) return '15-18 Años';
-  return '';
-}
+// URL del Apps Script — se pasa como prop desde App.jsx
+export default function BuscadorParticipante({ participantes, clubes, apiUrl, onActualizar }) {
+  const [termino, setTermino]               = useState('');
+  const [seleccionado, setSeleccionado]     = useState(null);
+  const [mostrarRecomendador, setMostrarRecomendador] = useState(false);
 
-// ─────────────────────────────────────────────────────────────
-// FormularioAgregar
-// Props:
-//   - apiUrl: URL del Apps Script de Google Sheets
-//   - clubes: lista de clubes para sugerencias y selector
-//   - todosParticipantes: para calcular ocupación actual de clubes
-//   - onGuardado: función que se llama tras guardar exitosamente
-// ─────────────────────────────────────────────────────────────
-export default function FormularioAgregar({ apiUrl, clubes, todosParticipantes = [], onGuardado }) {
-  // Modo activo: formulario de participante u oficial
-  const [modo, setModo] = useState('participante');
+  // Estados para eliminación
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
+  const [eliminando, setEliminando]         = useState(false);
+  const [mensajeEliminar, setMensajeEliminar] = useState(null);
 
-  // Estado del formulario de participante
-  const [form, setForm] = useState({
-    nombre: '', apellido: '', edad_actual: '', genero: '',
-    zona: '', sector: '', etapa: '', jornada: '',
-    cod_club: '', oficial: '', facilitador: '',
-    contacto: '', telefono: '', estado: 'Registrado',
-  });
+  // Resultados de búsqueda — mínimo 2 caracteres
+  const resultados = useMemo(() => {
+    if (termino.length < 2) return [];
+    return buscarParticipantes(participantes, termino).slice(0, 12);
+  }, [termino, participantes]);
 
-  // Estado del formulario de oficial
-  const [formOficial, setFormOficial] = useState({
-    nombre: '', zona: '', telefono: '', email: '',
-  });
-
-  // Sugerencia de etapa basada en edad (se muestra como pill informativo)
-  const [etapaSugerida, setEtapaSugerida] = useState('');
-
-  // Club seleccionado desde las sugerencias (antes de confirmar)
-  const [clubSugerido, setClubSugerido] = useState(null);
-
-  // Estados de UI
-  const [guardando, setGuardando] = useState(false);
-  const [mensaje, setMensaje]     = useState(null);
-
-  const ZONAS  = ['COL-J01', 'COL-J02', 'COL-J03', 'COL-J04'];
-
-  // ── Actualizar campo del form de participante ──
-  // Si el campo es "edad_actual", calcula y sugiere la etapa automáticamente
-  function cambiar(campo, valor) {
-    setForm(prev => {
-      const nuevo = { ...prev, [campo]: valor };
-
-      // Sugerir etapa cuando cambia la edad
-      // Siempre actualiza el selector automáticamente,
-      // el usuario puede cambiarlo manualmente después si necesita
-      if (campo === 'edad_actual') {
-        const sugerencia = edadAEtapa(valor);
-        setEtapaSugerida(sugerencia);
-        if (sugerencia) {
-          nuevo.etapa = sugerencia;
-        }
-      }
-
-      // Limpiar club elegido si cambia zona, etapa o jornada
-      if (['zona', 'etapa', 'jornada'].includes(campo)) {
-        nuevo.cod_club = '';
-        setClubSugerido(null);
-      }
-
-      return nuevo;
-    });
+  // Seleccionar participante de los resultados
+  function seleccionar(p) {
+    setSeleccionado(p);
+    setTermino('');
+    setMostrarRecomendador(false);
+    setConfirmandoEliminar(false);
+    setMensajeEliminar(null);
   }
 
-  // ── Calcular clubes compatibles en tiempo real ──
-  // Se activa cuando el participante tiene etapa + jornada + zona
-  const clubesCompatibles = useMemo(() => {
-    if (!form.etapa || !form.jornada || !form.zona) return [];
-
-    // Construir un "participante temporal" para usar la función de filtrado existente
-    const participanteTemporal = {
-      etapa: form.etapa,
-      jornada: form.jornada,
-      zona: form.zona,
-      cod_club: '', // No tiene club aún, así no se excluye ninguno
-    };
-
-    return filtrarClubesCompatibles({
-      participante: participanteTemporal,
-      clubes,
-      todosParticipantes,
-    }).slice(0, 6); // Mostrar máximo 6 sugerencias
-  }, [form.etapa, form.jornada, form.zona, clubes, todosParticipantes]);
-
-  // ── Seleccionar club desde las sugerencias ──
-  function elegirClub(club) {
-    setClubSugerido(club);
-    cambiar('cod_club', club.cod_club);
+  // Cerrar perfil
+  function limpiar() {
+    setSeleccionado(null);
+    setMostrarRecomendador(false);
+    setConfirmandoEliminar(false);
+    setMensajeEliminar(null);
   }
 
-  // ── Guardar participante ──
-  async function guardarParticipante() {
-    if (!form.nombre || !form.apellido || !form.etapa) {
-      setMensaje({ tipo: 'error', texto: 'Nombre, apellido y etapa son obligatorios.' });
-      return;
-    }
-    setGuardando(true);
-    setMensaje(null);
-    try {
-      const datosSheets = {
-        "Nombre Completo":                    form.nombre,
-        "Apellido del Participante":          form.apellido,
-        "Edad Actual":                        form.edad_actual,
-        "Género":                             form.genero,
-        "Zona":                               form.zona,
-        "Sector":                             form.sector,
-        "Etapa de vida":                      form.etapa,
-        "Jornada Asignada":                   form.jornada,
-        "Cod. Club":                          form.cod_club,
-        "Oficial Responsable":                form.oficial,
-        "Facilitador Asignado":               form.facilitador,
-        "Contacto Principal del Participante": form.contacto,
-        "Telefono":                           form.telefono,
-        "Estado del Participante":            form.estado,
-      };
-      const res = await fetch(apiUrl, {
-        method: 'POST',
-        body: JSON.stringify({ tipo: 'participante', datos: datosSheets }),
-      });
-      const respuesta = await res.json();
-      if (respuesta.ok) {
-        setMensaje({ tipo: 'ok', texto: '✅ Participante agregado correctamente al Google Sheets.' });
-        setForm({ nombre: '', apellido: '', edad_actual: '', genero: '', zona: '', sector: '',
-                  etapa: '', jornada: '', cod_club: '', oficial: '', facilitador: '',
-                  contacto: '', telefono: '', estado: 'Registrado' });
-        setEtapaSugerida('');
-        setClubSugerido(null);
-        if (onGuardado) onGuardado();
-      } else {
-        setMensaje({ tipo: 'error', texto: respuesta.error || 'Error al guardar.' });
-      }
-    } catch {
-      setMensaje({ tipo: 'error', texto: 'Error de conexión. Verifica tu internet.' });
-    } finally {
-      setGuardando(false);
-    }
-  }
-
-  // ── Guardar oficial ──
-  async function guardarOficial() {
-    if (!formOficial.nombre || !formOficial.zona) {
-      setMensaje({ tipo: 'error', texto: 'Nombre y zona son obligatorios.' });
-      return;
-    }
-    setGuardando(true);
-    setMensaje(null);
+  // ── Eliminar participante ──
+  // Llama al Apps Script con accion: "eliminar" y el código del participante
+  async function eliminarParticipante() {
+    if (!seleccionado?.codigo) return;
+    setEliminando(true);
+    setMensajeEliminar(null);
     try {
       const res = await fetch(apiUrl, {
         method: 'POST',
-        body: JSON.stringify({ tipo: 'oficial', datos: formOficial }),
+        body: JSON.stringify({ accion: 'eliminar', codigo: seleccionado.codigo }),
       });
       const respuesta = await res.json();
       if (respuesta.ok) {
-        setMensaje({ tipo: 'ok', texto: '✅ Oficial agregado correctamente al Google Sheets.' });
-        setFormOficial({ nombre: '', zona: '', telefono: '', email: '' });
-        if (onGuardado) onGuardado();
+        setMensajeEliminar({ tipo: 'ok', texto: `✅ ${seleccionado.nombre} ${seleccionado.apellido} eliminado correctamente.` });
+        setConfirmandoEliminar(false);
+        // Refrescar lista de participantes
+        if (onActualizar) onActualizar();
+        // Limpiar selección tras 2 segundos
+        setTimeout(() => limpiar(), 2000);
       } else {
-        setMensaje({ tipo: 'error', texto: respuesta.error || 'Error al guardar.' });
+        setMensajeEliminar({ tipo: 'error', texto: respuesta.error || 'Error al eliminar.' });
       }
     } catch {
-      setMensaje({ tipo: 'error', texto: 'Error de conexión. Verifica tu internet.' });
+      setMensajeEliminar({ tipo: 'error', texto: 'Error de conexión.' });
     } finally {
-      setGuardando(false);
+      setEliminando(false);
     }
   }
 
   return (
     <div>
-      {/* ── Selector de modo ── */}
+      {/* ── Barra de búsqueda ── */}
       <div className="card" style={{ marginBottom: 20 }}>
-        <h2 style={{ fontSize: 18, marginBottom: 16 }}>➕ Agregar nuevo registro</h2>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className={modo === 'participante' ? 'btn-primario' : 'btn-secundario'}
-            onClick={() => { setModo('participante'); setMensaje(null); }}>
-            👤 Participante
-          </button>
-          <button className={modo === 'oficial' ? 'btn-primario' : 'btn-secundario'}
-            onClick={() => { setModo('oficial'); setMensaje(null); }}>
-            🏅 Oficial
-          </button>
-        </div>
-      </div>
+        <h2 style={{ fontSize: 18, marginBottom: 16 }}>🔍 Buscar Participante</h2>
+        <div style={{ position: 'relative' }}>
+          <input
+            className="input-base"
+            type="text"
+            placeholder="Escribe nombre, apellido o código..."
+            value={termino}
+            onChange={e => setTermino(e.target.value)}
+          />
 
-      {/* ══════════════════════════════════════════
-          FORMULARIO DE PARTICIPANTE
-      ══════════════════════════════════════════ */}
-      {modo === 'participante' && (
-        <div>
-          <div className="card" style={{ marginBottom: 20 }}>
-            <h3 style={{ fontSize: 16, marginBottom: 20 }}>👤 Datos personales</h3>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-
-              <Campo label="Nombre *">
-                <input className="input-base" placeholder="Nombre(s)"
-                  value={form.nombre} onChange={e => cambiar('nombre', e.target.value)} />
-              </Campo>
-
-              <Campo label="Apellido *">
-                <input className="input-base" placeholder="Apellidos"
-                  value={form.apellido} onChange={e => cambiar('apellido', e.target.value)} />
-              </Campo>
-
-              {/* Edad con sugerencia automática de etapa */}
-              <Campo label="Edad actual">
-                <input className="input-base" placeholder="Ej: 8" type="number"
-                  value={form.edad_actual} onChange={e => cambiar('edad_actual', e.target.value)} />
-                {/* Pill de sugerencia de etapa */}
-                {etapaSugerida && (
-                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Etapa sugerida:</span>
-                    <span className={`badge ${getEtapaColor(etapaSugerida)}`} style={{ fontSize: 11 }}>
-                      ✨ {etapaSugerida}
-                    </span>
+          {/* Dropdown de resultados */}
+          {resultados.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0,
+              background: '#1e293b', border: '1px solid #334155',
+              borderRadius: 12, marginTop: 6, zIndex: 100,
+              maxHeight: 320, overflowY: 'auto',
+            }}>
+              {resultados.map(p => (
+                <button key={p.codigo} onClick={() => seleccionar(p)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 16px', background: 'none', border: 'none',
+                    borderBottom: '1px solid #334155', color: '#e2e8f0',
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(249,115,22,0.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 8, background: '#f97316',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 16, flexShrink: 0,
+                  }}>
+                    {p.nombre?.[0] || '?'}
                   </div>
-                )}
-              </Campo>
-
-              <Campo label="Género">
-                <select className="input-base" value={form.genero}
-                  onChange={e => cambiar('genero', e.target.value)}>
-                  <option value="">Seleccionar...</option>
-                  <option value="Masculino">Masculino</option>
-                  <option value="Femenino">Femenino</option>
-                </select>
-              </Campo>
-
-              {/* Etapa — se autocompleta con la edad pero puede cambiarse */}
-              <Campo label="Etapa de vida *">
-                <select className="input-base" value={form.etapa}
-                  onChange={e => cambiar('etapa', e.target.value)}>
-                  <option value="">Seleccionar...</option>
-                  {['2-3 Años','4-5 Años','6-9 Años','10-14 Años','15-18 Años'].map(e =>
-                    <option key={e} value={e}>{e}</option>)}
-                </select>
-              </Campo>
-
-              <Campo label="Zona">
-                <select className="input-base" value={form.zona}
-                  onChange={e => cambiar('zona', e.target.value)}>
-                  <option value="">Seleccionar...</option>
-                  {ZONAS.map(z => <option key={z} value={z}>{z}</option>)}
-                </select>
-              </Campo>
-
-              <Campo label="Sector">
-                <input className="input-base" placeholder="Ej: COL-J0101"
-                  value={form.sector} onChange={e => cambiar('sector', e.target.value)} />
-              </Campo>
-
-              <Campo label="Jornada">
-                <select className="input-base" value={form.jornada}
-                  onChange={e => cambiar('jornada', e.target.value)}>
-                  <option value="">Seleccionar...</option>
-                  <option value="AM">AM</option>
-                  <option value="PM">PM</option>
-                </select>
-              </Campo>
-
-              <Campo label="Contacto principal">
-                <input className="input-base" placeholder="Nombre del acudiente"
-                  value={form.contacto} onChange={e => cambiar('contacto', e.target.value)} />
-              </Campo>
-
-              <Campo label="Teléfono">
-                <input className="input-base" placeholder="Número de contacto"
-                  value={form.telefono} onChange={e => cambiar('telefono', e.target.value)} />
-              </Campo>
-
-              <Campo label="Estado">
-                <select className="input-base" value={form.estado}
-                  onChange={e => cambiar('estado', e.target.value)}>
-                  <option value="Registrado">Registrado</option>
-                  <option value="Activo">Activo</option>
-                  <option value="Inactivo">Inactivo</option>
-                </select>
-              </Campo>
-
-            </div>
-          </div>
-
-          {/* ── Sugerencias de club inteligentes ── */}
-          {/* Se muestran cuando hay etapa + jornada + zona */}
-          {clubesCompatibles.length > 0 && (
-            <div className="card" style={{ marginBottom: 20 }}>
-              <h3 style={{ fontSize: 16, marginBottom: 6 }}>
-                🎯 Clubes recomendados
-              </h3>
-              <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>
-                Basado en <strong style={{ color: '#e2e8f0' }}>{form.etapa}</strong> · Jornada{' '}
-                <strong style={{ color: '#e2e8f0' }}>{form.jornada}</strong> · Zona{' '}
-                <strong style={{ color: '#f97316' }}>{form.zona}</strong>
-              </p>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                {clubesCompatibles.map(club => {
-                  const seleccionado = clubSugerido?.cod_club === club.cod_club;
-                  const iconoCercania = club.distanciaZona === 0 ? '🟢' : club.distanciaZona === 1 ? '🟡' : '🔴';
-                  const pct = Math.min((club.participantesActuales / 30) * 100, 100);
-                  const colorBarra = pct >= 90 ? '#ef4444' : pct >= 70 ? '#eab308' : '#22c55e';
-
-                  return (
-                    <div
-                      key={club.cod_club}
-                      onClick={() => club.hayEspacio && elegirClub(club)}
-                      style={{
-                        padding: 14, borderRadius: 12, cursor: club.hayEspacio ? 'pointer' : 'not-allowed',
-                        border: `2px solid ${seleccionado ? '#f97316' : '#334155'}`,
-                        background: seleccionado ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.02)',
-                        opacity: club.hayEspacio ? 1 : 0.5,
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      {/* Encabezado de la tarjeta */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 14 }}>{club.cod_club}</div>
-                          <div style={{ fontSize: 12, color: '#94a3b8' }}>{club.nombre_club}</div>
-                        </div>
-                        {/* Check si está seleccionado */}
-                        {seleccionado && (
-                          <div style={{
-                            width: 24, height: 24, borderRadius: '50%',
-                            background: '#f97316', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center', fontSize: 13,
-                          }}>✓</div>
-                        )}
-                      </div>
-
-                      {/* Datos del club */}
-                      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
-                        {iconoCercania} {club.zona} · {club.horario1}
-                        {club.horario2 ? ` / ${club.horario2}` : ''}
-                      </div>
-
-                      {/* Barra de ocupación */}
-                      <div style={{ marginBottom: 4 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
-                          <span style={{ color: '#94a3b8' }}>Ocupación</span>
-                          <span style={{ color: colorBarra }}>
-                            {club.participantesActuales}/30 · {club.capacidadDisponible} disponibles
-                          </span>
-                        </div>
-                        <div style={{ height: 5, background: '#334155', borderRadius: 3 }}>
-                          <div style={{ height: '100%', width: `${pct}%`, background: colorBarra, borderRadius: 3 }} />
-                        </div>
-                      </div>
-
-                      {!club.hayEspacio && (
-                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>Sin cupo disponible</div>
-                      )}
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{p.nombre} {p.apellido}</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                      Cód: {p.codigo} · {p.zona} · {p.etapa}
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Club elegido */}
-              {clubSugerido && (
-                <div style={{
-                  marginTop: 14, padding: 12, borderRadius: 10,
-                  background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)',
-                  fontSize: 13,
-                }}>
-                  ✅ Club seleccionado: <strong style={{ color: '#f97316' }}>{clubSugerido.cod_club}</strong>
-                  {' · '}{clubSugerido.zona} · {clubSugerido.horario1}
-                </div>
-              )}
+                  </div>
+                </button>
+              ))}
             </div>
           )}
 
-          {/* ── Datos adicionales ── */}
-          <div className="card" style={{ marginBottom: 20 }}>
-            <h3 style={{ fontSize: 16, marginBottom: 20 }}>📋 Asignación</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+          {termino.length >= 2 && resultados.length === 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0,
+              background: '#1e293b', border: '1px solid #334155',
+              borderRadius: 12, marginTop: 6, padding: 16,
+              color: '#94a3b8', fontSize: 14,
+            }}>
+              No se encontraron participantes con "{termino}"
+            </div>
+          )}
+        </div>
+      </div>
 
-              <Campo label="Oficial responsable">
-                <input className="input-base" placeholder="Nombre del oficial"
-                  value={form.oficial} onChange={e => cambiar('oficial', e.target.value)} />
-              </Campo>
+      {/* ── Perfil del participante seleccionado ── */}
+      {seleccionado && (
+        <div className="card" style={{ marginBottom: 20 }}>
 
-              <Campo label="Facilitador asignado">
-                <input className="input-base" placeholder="Nombre del facilitador"
-                  value={form.facilitador} onChange={e => cambiar('facilitador', e.target.value)} />
-              </Campo>
+          {/* Encabezado con botones de acción */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+              <div style={{
+                width: 54, height: 54, borderRadius: 14, background: '#f97316',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 24,
+              }}>
+                {seleccionado.nombre?.[0] || '?'}
+              </div>
+              <div>
+                <h3 style={{ fontSize: 20, color: '#fff' }}>
+                  {seleccionado.nombre} {seleccionado.apellido}
+                </h3>
+                <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                  <span className={`badge ${getEtapaColor(seleccionado.etapa)}`}>{seleccionado.etapa}</span>
+                  <span className="badge badge-azul">Jornada {seleccionado.jornada}</span>
+                  <span className={`badge ${seleccionado.estado === 'Registrado' ? 'badge-verde' : 'badge-amarillo'}`}>
+                    {seleccionado.estado}
+                  </span>
+                </div>
+              </div>
+            </div>
 
+            {/* Botones cerrar y eliminar */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-secundario" onClick={limpiar} style={{ padding: '8px 14px', fontSize: 13 }}>
+                ✕ Cerrar
+              </button>
+              <button
+                onClick={() => { setConfirmandoEliminar(true); setMensajeEliminar(null); }}
+                style={{
+                  background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                  color: '#ef4444', borderRadius: 10, padding: '8px 14px',
+                  fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                }}
+              >
+                🗑️ Eliminar
+              </button>
             </div>
           </div>
 
-          {/* Botón guardar */}
-          <button className="btn-primario" onClick={guardarParticipante}
-            disabled={guardando} style={{ opacity: guardando ? 0.6 : 1 }}>
-            {guardando ? '⏳ Guardando...' : '💾 Guardar participante'}
-          </button>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════
-          FORMULARIO DE OFICIAL
-      ══════════════════════════════════════════ */}
-      {modo === 'oficial' && (
-        <div className="card">
-          <h3 style={{ fontSize: 16, marginBottom: 20 }}>🏅 Datos del nuevo oficial</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-            <Campo label="Nombre completo *">
-              <input className="input-base" placeholder="Nombre del oficial"
-                value={formOficial.nombre} onChange={e => setFormOficial(p => ({ ...p, nombre: e.target.value }))} />
-            </Campo>
-            <Campo label="Zona asignada *">
-              <select className="input-base" value={formOficial.zona}
-                onChange={e => setFormOficial(p => ({ ...p, zona: e.target.value }))}>
-                <option value="">Seleccionar...</option>
-                {ZONAS.map(z => <option key={z} value={z}>{z}</option>)}
-              </select>
-            </Campo>
-            <Campo label="Teléfono">
-              <input className="input-base" placeholder="Número de contacto"
-                value={formOficial.telefono} onChange={e => setFormOficial(p => ({ ...p, telefono: e.target.value }))} />
-            </Campo>
-            <Campo label="Email">
-              <input className="input-base" placeholder="correo@ejemplo.com" type="email"
-                value={formOficial.email} onChange={e => setFormOficial(p => ({ ...p, email: e.target.value }))} />
-            </Campo>
+          {/* Grid de datos del perfil */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+            <Campo label="Código"       valor={seleccionado.codigo} />
+            <Campo label="Edad actual"  valor={`${seleccionado.edad_actual} años`} />
+            <Campo label="Edad 2026"    valor={`${seleccionado.edad_2026} años`} />
+            <Campo label="Género"       valor={seleccionado.genero} />
+            <Campo label="Zona"         valor={seleccionado.zona} />
+            <Campo label="Sector"       valor={seleccionado.sector} />
+            <Campo label="Club actual"  valor={seleccionado.cod_club} destaca />
+            <Campo label="Horario 1"    valor={seleccionado.horario1} />
+            <Campo label="Horario 2"    valor={seleccionado.horario2} />
+            <Campo label="Lugar"        valor={seleccionado.pps_nombre} />
+            <Campo label="Oficial"      valor={seleccionado.oficial} />
+            <Campo label="Facilitador"  valor={seleccionado.facilitador} />
+            <Campo label="Contacto"     valor={seleccionado.contacto} />
+            <Campo label="Teléfono"     valor={seleccionado.telefono} />
           </div>
-          <div style={{ marginTop: 24 }}>
-            <button className="btn-primario" onClick={guardarOficial}
-              disabled={guardando} style={{ opacity: guardando ? 0.6 : 1 }}>
-              {guardando ? '⏳ Guardando...' : '💾 Guardar oficial'}
+
+          {/* Historial de club */}
+          {(seleccionado.club_nuevo || seleccionado.club_anterior) && (
+            <div style={{
+              marginTop: 16, padding: 14,
+              background: 'rgba(249,115,22,0.07)',
+              borderRadius: 10, border: '1px solid rgba(249,115,22,0.2)',
+            }}>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>📋 Historial de club</div>
+              {seleccionado.club_nuevo    && <div style={{ fontSize: 13 }}><strong>Club nuevo:</strong> {seleccionado.club_nuevo}</div>}
+              {seleccionado.club_anterior && <div style={{ fontSize: 13 }}><strong>Club anterior:</strong> {seleccionado.club_anterior}</div>}
+            </div>
+          )}
+
+          {/* ── Panel de confirmación de eliminación ── */}
+          {confirmandoEliminar && (
+            <div style={{
+              marginTop: 16, padding: 16, borderRadius: 12,
+              background: 'rgba(239,68,68,0.08)',
+              border: '1px solid rgba(239,68,68,0.3)',
+            }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#ef4444', marginBottom: 8 }}>
+                ⚠️ ¿Confirmar eliminación?
+              </div>
+              <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 14 }}>
+                Estás a punto de eliminar a{' '}
+                <strong style={{ color: '#e2e8f0' }}>
+                  {seleccionado.nombre} {seleccionado.apellido}
+                </strong>{' '}
+                (Cód: {seleccionado.codigo}) del Google Sheets.{' '}
+                <strong style={{ color: '#ef4444' }}>Esta acción no se puede deshacer.</strong>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={eliminarParticipante}
+                  disabled={eliminando}
+                  style={{
+                    background: '#ef4444', color: '#fff', border: 'none',
+                    borderRadius: 10, padding: '10px 20px', cursor: 'pointer',
+                    fontFamily: 'DM Sans, sans-serif', fontWeight: 600, fontSize: 14,
+                    opacity: eliminando ? 0.6 : 1,
+                  }}
+                >
+                  {eliminando ? '⏳ Eliminando...' : '🗑️ Sí, eliminar'}
+                </button>
+                <button
+                  className="btn-secundario"
+                  onClick={() => setConfirmandoEliminar(false)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mensaje resultado eliminación */}
+          {mensajeEliminar && (
+            <div style={{
+              marginTop: 12, padding: 14, borderRadius: 10, fontSize: 13,
+              background: mensajeEliminar.tipo === 'ok' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+              border: `1px solid ${mensajeEliminar.tipo === 'ok' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+              color: mensajeEliminar.tipo === 'ok' ? '#22c55e' : '#ef4444',
+            }}>
+              {mensajeEliminar.texto}
+            </div>
+          )}
+
+          {/* Botón reasignar club */}
+          <div style={{ marginTop: 20 }}>
+            <button className="btn-primario"
+              onClick={() => setMostrarRecomendador(!mostrarRecomendador)}>
+              {mostrarRecomendador ? '▲ Ocultar recomendaciones' : '🔄 Ver clubes disponibles para reasignar'}
             </button>
           </div>
         </div>
       )}
 
-      {/* ── Mensaje de resultado ── */}
-      {mensaje && (
-        <div style={{
-          marginTop: 16, padding: 16, borderRadius: 12,
-          background: mensaje.tipo === 'ok' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-          border: `1px solid ${mensaje.tipo === 'ok' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
-          color: mensaje.tipo === 'ok' ? '#22c55e' : '#ef4444', fontSize: 14,
-        }}>
-          {mensaje.texto}
-        </div>
+      {/* ── Recomendador de clubes ── */}
+      {seleccionado && mostrarRecomendador && (
+        <RecomendadorClub
+          participante={seleccionado}
+          clubes={clubes}
+          todosParticipantes={participantes}
+        />
       )}
     </div>
   );
 }
 
-// Campo — wrapper con etiqueta para cada input del formulario
-function Campo({ label, children }) {
+// Campo — dato del perfil con etiqueta
+function Campo({ label, valor, destaca }) {
+  if (!valor) return null;
   return (
-    <div>
-      <label style={{
-        display: 'block', fontSize: 11, color: '#94a3b8',
-        textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
-      }}>
+    <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: '10px 14px' }}>
+      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         {label}
-      </label>
-      {children}
+      </div>
+      <div style={{ fontSize: 14, color: destaca ? '#f97316' : '#e2e8f0', fontWeight: destaca ? 600 : 400 }}>
+        {valor}
+      </div>
     </div>
   );
 }
