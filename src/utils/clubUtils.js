@@ -150,3 +150,4 @@ export function buscarParticipantes(participantes, termino) {
     return campos.some(c => normalizarTexto(c).includes(t));
   });
 }
+
