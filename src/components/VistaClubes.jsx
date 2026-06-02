@@ -8,9 +8,11 @@ import React, { useState, useMemo } from 'react';
 import { getEtapaColor } from '../utils/clubUtils';
 
 export default function VistaClubes({ clubes, participantes }) {
-  const [filtroZona,    setFiltroZona]    = useState('');
-  const [filtroEtapa,   setFiltroEtapa]   = useState('');
-  const [filtroJornada, setFiltroJornada] = useState('');
+  const [filtroZona,           setFiltroZona]           = useState('');
+  const [filtroEtapa,          setFiltroEtapa]          = useState('');
+  const [filtroJornada,        setFiltroJornada]        = useState('');
+  const [filtroOficial,        setFiltroOficial]        = useState('');
+  const [filtroDisponibilidad, setFiltroDisponibilidad] = useState('todos');
 
   // Club expandido para ver su lista de participantes
   const [clubExpandido, setClubExpandido] = useState(null);
@@ -36,18 +38,28 @@ export default function VistaClubes({ clubes, participantes }) {
   }, [participantes]);
 
   // Valores únicos para los filtros
-  const zonas    = useMemo(() => [...new Set(clubes.map(c => c.zona).filter(Boolean))].sort(), [clubes]);
-  const etapas   = useMemo(() => [...new Set(clubes.map(c => c.etapa).filter(Boolean))].sort(), [clubes]);
+  const zonas     = useMemo(() => [...new Set(clubes.map(c => c.zona).filter(Boolean))].sort(), [clubes]);
+  const etapas    = useMemo(() => [...new Set(clubes.map(c => c.etapa).filter(Boolean))].sort(), [clubes]);
+  // Oficiales únicos extraídos de los participantes (más completo que desde clubes)
+  const oficiales = useMemo(() => [...new Set(participantes.map(p => p.oficial).filter(Boolean))].sort(), [participantes]);
 
-  // Aplicar filtros
+  // Aplicar todos los filtros
   const clubesFiltrados = useMemo(() => {
     return clubes.filter(c => {
+      const ocupados = parseInt(conteoPorClub[c.cod_club]) || 0;
       const matchZona    = !filtroZona    || c.zona === filtroZona;
       const matchEtapa   = !filtroEtapa   || c.etapa === filtroEtapa;
       const matchJornada = !filtroJornada || c.jornada === filtroJornada;
-      return matchZona && matchEtapa && matchJornada;
+      // Filtro por oficial: busca en los participantes del club
+      const matchOficial = !filtroOficial || c.oficial === filtroOficial;
+      // Filtro por disponibilidad: con_cupo = menos de 30, llenos = 30 o más
+      const matchDisp =
+        filtroDisponibilidad === 'todos'    ? true :
+        filtroDisponibilidad === 'con_cupo' ? ocupados < 30 :
+        filtroDisponibilidad === 'llenos'   ? ocupados >= 30 : true;
+      return matchZona && matchEtapa && matchJornada && matchOficial && matchDisp;
     });
-  }, [clubes, filtroZona, filtroEtapa, filtroJornada]);
+  }, [clubes, filtroZona, filtroEtapa, filtroJornada, filtroOficial, filtroDisponibilidad, conteoPorClub]);
 
   // Toggle expandir/colapsar un club
   function toggleClub(codClub) {
@@ -60,18 +72,22 @@ export default function VistaClubes({ clubes, participantes }) {
       <div className="card" style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 18, marginBottom: 16 }}>🏫 Directorio de Clubes</h2>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+
+          {/* Filtro por zona */}
           <select className="input-base" style={{ width: 'auto', minWidth: 160 }}
             value={filtroZona} onChange={e => setFiltroZona(e.target.value)}>
             <option value="">Todas las zonas</option>
             {zonas.map(z => <option key={z} value={z}>{z}</option>)}
           </select>
 
+          {/* Filtro por etapa de vida */}
           <select className="input-base" style={{ width: 'auto', minWidth: 160 }}
             value={filtroEtapa} onChange={e => setFiltroEtapa(e.target.value)}>
             <option value="">Todas las etapas</option>
             {etapas.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
 
+          {/* Filtro por jornada */}
           <select className="input-base" style={{ width: 'auto', minWidth: 120 }}
             value={filtroJornada} onChange={e => setFiltroJornada(e.target.value)}>
             <option value="">AM y PM</option>
@@ -79,13 +95,36 @@ export default function VistaClubes({ clubes, participantes }) {
             <option value="PM">Jornada PM</option>
           </select>
 
+          {/* Filtro por oficial responsable */}
+          <select className="input-base" style={{ width: 'auto', minWidth: 180 }}
+            value={filtroOficial} onChange={e => setFiltroOficial(e.target.value)}>
+            <option value="">Todos los oficiales</option>
+            {oficiales.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+
+          {/* Filtro por disponibilidad de cupo */}
+          <select className="input-base" style={{ width: 'auto', minWidth: 160 }}
+            value={filtroDisponibilidad} onChange={e => setFiltroDisponibilidad(e.target.value)}>
+            <option value="todos">Todos los cupos</option>
+            <option value="con_cupo">🟢 Con cupo disponible</option>
+            <option value="llenos">🔴 Clubes llenos</option>
+          </select>
+
+          {/* Contador de resultados */}
           <span style={{ fontSize: 13, color: '#94a3b8' }}>
             {clubesFiltrados.length} de {clubes.length} clubes
           </span>
 
-          {(filtroZona || filtroEtapa || filtroJornada) && (
+          {/* Botón limpiar — aparece si hay algún filtro activo */}
+          {(filtroZona || filtroEtapa || filtroJornada || filtroOficial || filtroDisponibilidad !== 'todos') && (
             <button className="btn-secundario" style={{ fontSize: 12, padding: '8px 14px' }}
-              onClick={() => { setFiltroZona(''); setFiltroEtapa(''); setFiltroJornada(''); }}>
+              onClick={() => {
+                setFiltroZona('');
+                setFiltroEtapa('');
+                setFiltroJornada('');
+                setFiltroOficial('');
+                setFiltroDisponibilidad('todos');
+              }}>
               ✕ Limpiar filtros
             </button>
           )}
@@ -255,5 +294,6 @@ export default function VistaClubes({ clubes, participantes }) {
       </div>
     </div>
   );
+}
 }
 
