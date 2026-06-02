@@ -20,7 +20,7 @@ import FormularioAgregar    from './components/FormularioAgregar';
 
 // ── URL de la API de Google Sheets (Apps Script) ──
 // Esta URL conecta la app con tu Google Sheets directamente
-const API_URL = "https://script.google.com/macros/s/AKfycbyEp7QTWHLCiM1zS8OAhtWHlYsAJ6sJ5fw2vnmrVyGmtjjiEoQUgMBeLu7tIcijNs4nwg/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxbiCyAMQliEVzesyaloEByHzEOpM9kh2h8JTfrCrOVAVlN2xEIsaYeXE78H_FiuZfmjQ/exec";
 
 // ── Definición de las pestañas de navegación ──
 const TABS = [
