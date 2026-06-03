@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/asj-clubes/static/css/main.0dea8301.css",
+    "main.js": "/asj-clubes/static/js/main.85c8fdb8.js",
+    "index.html": "/asj-clubes/index.html",
+    "main.0dea8301.css.map": "/asj-clubes/static/css/main.0dea8301.css.map",
+    "main.85c8fdb8.js.map": "/asj-clubes/static/js/main.85c8fdb8.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.0dea8301.css",
+    "static/js/main.85c8fdb8.js"
+  ]
+}
