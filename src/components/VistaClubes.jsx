@@ -154,10 +154,14 @@ export default function VistaClubes({ clubes, participantes }) {
                 padding: '16px 20px', flexWrap: 'wrap',
               }}>
 
-                {/* Código y nombre */}
+                {/* Código del club y facilitador asignado */}
                 <div style={{ flex: '1 1 180px' }}>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{club.cod_club}</div>
-                  <div style={{ fontSize: 12, color: '#94a3b8' }}>{club.nombre_club}</div>
+                  <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                    {club.oficial
+                      ? <span>👤 {club.oficial}</span>
+                      : <span style={{ color: '#475569' }}>Sin facilitador</span>}
+                  </div>
                 </div>
 
                 {/* Badges */}
@@ -243,7 +247,7 @@ export default function VistaClubes({ clubes, participantes }) {
                           fontSize: 13,
                           background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
                         }}>
-                          {/* Nombre con inicial */}
+                          {/* Nombre completo: apellido + nombre con inicial */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{
                               width: 28, height: 28, borderRadius: 7, background: '#f97316',
@@ -253,7 +257,12 @@ export default function VistaClubes({ clubes, participantes }) {
                               {p.nombre?.[0] || '?'}
                             </div>
                             <div>
-                              <div style={{ fontWeight: 600 }}>{p.nombre} {p.apellido}</div>
+                              {/* Muestra apellido en negrita + nombre completo */}
+                              <div style={{ fontWeight: 600 }}>
+                                {p.apellido && <span>{p.apellido}</span>}
+                                {p.apellido && p.nombre && ', '}
+                                {p.nombre && <span style={{ fontWeight: 400 }}>{p.nombre}</span>}
+                              </div>
                               <div style={{ fontSize: 11, color: '#94a3b8' }}>{p.zona} · {p.sector}</div>
                             </div>
                           </div>
