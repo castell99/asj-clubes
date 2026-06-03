@@ -1,0 +1,550 @@
+// ============================================================
+// VistaHorario.jsx — Vista de horario interactiva
+// ============================================================
+// Muestra los clubes organizados en una grilla de días x horas.
+// Permite filtrar por PPS, zona y oficial.
+// Los bloques se pueden arrastrar para reorganizar.
+// Los cambios se confirman antes de guardarse en Google Sheets.
+
+import React, { useState, useMemo, useRef } from 'react';
+import { getEtapaColor, NOMBRE_PPS } from '../utils/clubUtils';
+
+// ── Colores por etapa de vida ──
+const COLORES_ETAPA = {
+  '2-3 Años':   { bg: 'rgba(34,197,94,0.15)',  borde: '#22c55e',  texto: '#22c55e'  },
+  '4-5 Años':   { bg: 'rgba(59,130,246,0.15)', borde: '#3b82f6',  texto: '#60a5fa'  },
+  '6-9 Años':   { bg: 'rgba(249,115,22,0.15)', borde: '#f97316',  texto: '#f97316'  },
+  '10-14 Años': { bg: 'rgba(234,179,8,0.15)',  borde: '#eab308',  texto: '#eab308'  },
+  '15-18 Años': { bg: 'rgba(168,85,247,0.15)', borde: '#a855f7',  texto: '#c084fc'  },
+};
+
+// ── Orden de los días ──
+const DIAS_ORDEN = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
+
+// ─────────────────────────────────────────────────────────────
+// Normalizar horario — limpia espacios y formatos inconsistentes
+// Ej: "8:30 - 9:30" → "8:30-9:30"
+// ─────────────────────────────────────────────────────────────
+function normalizarHorario(h) {
+  return (h || '').trim().replace(/\s*-\s*/g, '-').replace(/\s+/g, ' ');
+}
+
+// ─────────────────────────────────────────────────────────────
+// parsearHorario — separa "Lunes 8:30-9:30" en { dia, hora }
+// ─────────────────────────────────────────────────────────────
+function parsearHorario(horario) {
+  const h = normalizarHorario(horario);
+  const partes = h.split(' ');
+  if (partes.length < 2) return null;
+  const dia = partes[0];
+  const hora = partes.slice(1).join(' ').trim();
+  if (!DIAS_ORDEN.includes(dia)) return null;
+  return { dia, hora };
+}
+
+// ─────────────────────────────────────────────────────────────
+// VistaHorario
+// Props:
+//   - clubes: catálogo de clubes
+//   - participantes: para contar ocupación
+//   - apiUrl: para guardar cambios en Google Sheets
+// ─────────────────────────────────────────────────────────────
+export default function VistaHorario({ clubes, participantes, apiUrl }) {
+  // Filtros activos
+  const [filtroPPS,      setFiltroPPS]      = useState('');
+  const [filtroZona,     setFiltroZona]     = useState('');
+  const [filtroOficial,  setFiltroOficial]  = useState('');
+
+  // Bloques con cambios pendientes (antes de confirmar)
+  // { cod_club: { horario1: nuevo, horario2: nuevo } }
+  const [cambiosPendientes, setCambiosPendientes] = useState({});
+
+  // Club arrastrado actualmente
+  const [dragging, setDragging] = useState(null); // { cod_club, horarioOrigen, slot: 'horario1'|'horario2' }
+
+  // Modal de confirmación
+  const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [mensajeGuardado, setMensajeGuardado] = useState(null);
+
+  // Club seleccionado para ver detalle
+  const [clubDetalle, setClubDetalle] = useState(null);
+
+  // Conteo de participantes por club
+  const conteoPorClub = useMemo(() => {
+    const mapa = {};
+    participantes.forEach(p => {
+      if (p.cod_club) mapa[p.cod_club] = (mapa[p.cod_club] || 0) + 1;
+    });
+    return mapa;
+  }, [participantes]);
+
+  // Valores únicos para filtros
+  const ppsList   = useMemo(() => [...new Set(clubes.map(c => c.pps_abrev).filter(Boolean))].sort(), [clubes]);
+  const zonas     = useMemo(() => [...new Set(clubes.map(c => c.zona).filter(Boolean))].sort(), [clubes]);
+  const oficiales = useMemo(() => [...new Set(participantes.map(p => p.oficial).filter(Boolean))].sort(), [participantes]);
+
+  // ── Clubes con cambios aplicados (para mostrar en la grilla) ──
+  const clubesActuales = useMemo(() => {
+    return clubes.map(c => ({
+      ...c,
+      horario1: cambiosPendientes[c.cod_club]?.horario1 ?? c.horario1,
+      horario2: cambiosPendientes[c.cod_club]?.horario2 ?? c.horario2,
+    }));
+  }, [clubes, cambiosPendientes]);
+
+  // ── Filtrar clubes ──
+  const clubesFiltrados = useMemo(() => {
+    return clubesActuales.filter(c => {
+      const matchPPS     = !filtroPPS     || c.pps_abrev === filtroPPS;
+      const matchZona    = !filtroZona    || c.zona === filtroZona;
+      const matchOficial = !filtroOficial || c.oficial === filtroOficial;
+      return matchPPS && matchZona && matchOficial;
+    });
+  }, [clubesActuales, filtroPPS, filtroZona, filtroOficial]);
+
+  // ── Construir grilla: { dia: { hora: [clubes] } } ──
+  const grilla = useMemo(() => {
+    const mapa = {};
+    const horasSet = new Set();
+
+    clubesFiltrados.forEach(club => {
+      [club.horario1, club.horario2].forEach(h => {
+        const parsed = parsearHorario(h);
+        if (!parsed) return;
+        const { dia, hora } = parsed;
+        horasSet.add(hora);
+        if (!mapa[dia]) mapa[dia] = {};
+        if (!mapa[dia][hora]) mapa[dia][hora] = [];
+        mapa[dia][hora].push({ ...club, _slot: h });
+      });
+    });
+
+    // Ordenar horas por hora de inicio
+    const horasOrdenadas = [...horasSet].sort((a, b) => {
+      const getMin = h => {
+        const inicio = h.split('-')[0].trim();
+        const [hh, mm] = inicio.split(':').map(Number);
+        return hh * 60 + (mm || 0);
+      };
+      return getMin(a) - getMin(b);
+    });
+
+    return { mapa, horas: horasOrdenadas };
+  }, [clubesFiltrados]);
+
+  // ── Días que tienen al menos un club ──
+  const diasActivos = useMemo(() => {
+    return DIAS_ORDEN.filter(d => grilla.mapa[d] && Object.keys(grilla.mapa[d]).length > 0);
+  }, [grilla]);
+
+  // ── Drag and Drop ──
+  function onDragStart(club, slot) {
+    setDragging({ cod_club: club.cod_club, horarioOrigen: club[slot], slot });
+  }
+
+  function onDragOver(e) {
+    e.preventDefault(); // Necesario para permitir el drop
+  }
+
+  function onDrop(e, dia, hora) {
+    e.preventDefault();
+    if (!dragging) return;
+
+    // Construir el nuevo horario: "Dia Hora"
+    const nuevoHorario = `${dia} ${hora}`;
+
+    // Registrar el cambio como pendiente
+    setCambiosPendientes(prev => ({
+      ...prev,
+      [dragging.cod_club]: {
+        ...(prev[dragging.cod_club] || {}),
+        [dragging.slot]: nuevoHorario,
+      },
+    }));
+
+    setDragging(null);
+  }
+
+  // ── Contar cambios pendientes ──
+  const totalCambios = Object.keys(cambiosPendientes).length;
+
+  // ── Descartar todos los cambios ──
+  function descartarCambios() {
+    setCambiosPendientes({});
+    setMostrarConfirmacion(false);
+    setMensajeGuardado(null);
+  }
+
+  // ── Guardar cambios en Google Sheets ──
+  async function guardarCambios() {
+    setGuardando(true);
+    setMensajeGuardado(null);
+    let errores = 0;
+
+    for (const [cod_club, cambios] of Object.entries(cambiosPendientes)) {
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          body: JSON.stringify({
+            accion: 'actualizarHorario',
+            codigo: cod_club,
+            datos: cambios,
+          }),
+        });
+        const r = await res.json();
+        if (!r.ok) errores++;
+      } catch {
+        errores++;
+      }
+    }
+
+    setGuardando(false);
+
+    if (errores === 0) {
+      setMensajeGuardado({ tipo: 'ok', texto: `✅ ${totalCambios} cambio(s) guardados correctamente en Google Sheets.` });
+      setCambiosPendientes({});
+      setMostrarConfirmacion(false);
+    } else {
+      setMensajeGuardado({ tipo: 'error', texto: `⚠️ ${errores} cambio(s) no se pudieron guardar. Intenta de nuevo.` });
+    }
+  }
+
+  return (
+    <div>
+      {/* ── Encabezado y filtros ── */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+          <h2 style={{ fontSize: 18 }}>📅 Horario de Clubes</h2>
+
+          {/* Botón de cambios pendientes */}
+          {totalCambios > 0 && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn-primario"
+                onClick={() => setMostrarConfirmacion(true)}
+                style={{ fontSize: 13 }}
+              >
+                💾 Guardar {totalCambios} cambio{totalCambios > 1 ? 's' : ''}
+              </button>
+              <button
+                className="btn-secundario"
+                onClick={descartarCambios}
+                style={{ fontSize: 13 }}
+              >
+                ✕ Descartar
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Filtros */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <select className="input-base" style={{ width: 'auto', minWidth: 180 }}
+            value={filtroPPS} onChange={e => setFiltroPPS(e.target.value)}>
+            <option value="">Todos los PPS</option>
+            {ppsList.map(p => (
+              <option key={p} value={p}>{p} — {NOMBRE_PPS?.[p] || p}</option>
+            ))}
+          </select>
+
+          <select className="input-base" style={{ width: 'auto', minWidth: 150 }}
+            value={filtroZona} onChange={e => setFiltroZona(e.target.value)}>
+            <option value="">Todas las zonas</option>
+            {zonas.map(z => <option key={z} value={z}>{z}</option>)}
+          </select>
+
+          <select className="input-base" style={{ width: 'auto', minWidth: 180 }}
+            value={filtroOficial} onChange={e => setFiltroOficial(e.target.value)}>
+            <option value="">Todos los oficiales</option>
+            {oficiales.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+
+          {(filtroPPS || filtroZona || filtroOficial) && (
+            <button className="btn-secundario" style={{ fontSize: 12, padding: '8px 14px' }}
+              onClick={() => { setFiltroPPS(''); setFiltroZona(''); setFiltroOficial(''); }}>
+              ✕ Limpiar
+            </button>
+          )}
+        </div>
+
+        {/* Leyenda de colores por etapa */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+          {Object.entries(COLORES_ETAPA).map(([etapa, color]) => (
+            <span key={etapa} style={{
+              fontSize: 11, padding: '3px 10px', borderRadius: 20,
+              background: color.bg, border: `1px solid ${color.borde}`,
+              color: color.texto, fontWeight: 600,
+            }}>
+              {etapa}
+            </span>
+          ))}
+          <span style={{ fontSize: 11, color: '#94a3b8', alignSelf: 'center' }}>
+            · Arrastra los bloques para reorganizar
+          </span>
+        </div>
+      </div>
+
+      {/* Mensaje de guardado */}
+      {mensajeGuardado && (
+        <div style={{
+          marginBottom: 16, padding: 14, borderRadius: 12, fontSize: 13,
+          background: mensajeGuardado.tipo === 'ok' ? 'rgba(34,197,94,0.1)' : 'rgba(234,179,8,0.1)',
+          border: `1px solid ${mensajeGuardado.tipo === 'ok' ? 'rgba(34,197,94,0.3)' : 'rgba(234,179,8,0.3)'}`,
+          color: mensajeGuardado.tipo === 'ok' ? '#22c55e' : '#eab308',
+        }}>
+          {mensajeGuardado.texto}
+        </div>
+      )}
+
+      {/* ── Grilla de horario ── */}
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `120px repeat(${diasActivos.length}, minmax(150px, 1fr))`,
+          gap: 2,
+          minWidth: 600,
+        }}>
+
+          {/* Encabezados de días */}
+          <div style={{
+            background: '#1e293b', borderRadius: 10, padding: '12px 10px',
+            fontSize: 12, color: '#94a3b8', fontWeight: 600,
+            textTransform: 'uppercase', letterSpacing: '0.05em',
+          }}>
+            Hora
+          </div>
+          {diasActivos.map(dia => (
+            <div key={dia} style={{
+              background: '#1e293b', borderRadius: 10, padding: '12px 10px',
+              fontSize: 13, fontWeight: 700, color: '#e2e8f0', textAlign: 'center',
+              fontFamily: 'Syne, sans-serif',
+            }}>
+              {dia}
+            </div>
+          ))}
+
+          {/* Filas por hora */}
+          {grilla.horas.map(hora => (
+            <React.Fragment key={hora}>
+              {/* Celda de hora */}
+              <div style={{
+                background: 'rgba(249,115,22,0.06)', borderRadius: 8,
+                padding: '10px 10px', fontSize: 12, color: '#f97316',
+                fontWeight: 600, display: 'flex', alignItems: 'center',
+              }}>
+                {hora}
+              </div>
+
+              {/* Celdas por día */}
+              {diasActivos.map(dia => {
+                const clubesEnCelda = grilla.mapa[dia]?.[hora] || [];
+                const esCeldaVacia = clubesEnCelda.length === 0;
+
+                return (
+                  <div
+                    key={`${dia}-${hora}`}
+                    onDragOver={onDragOver}
+                    onDrop={e => onDrop(e, dia, hora)}
+                    style={{
+                      minHeight: 80,
+                      background: dragging ? 'rgba(249,115,22,0.04)' : 'rgba(255,255,255,0.01)',
+                      border: dragging ? '1px dashed rgba(249,115,22,0.3)' : '1px solid transparent',
+                      borderRadius: 8, padding: 4,
+                      display: 'flex', flexDirection: 'column', gap: 4,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {esCeldaVacia && dragging && (
+                      <div style={{
+                        height: '100%', minHeight: 72,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 11, color: 'rgba(249,115,22,0.4)',
+                      }}>
+                        Soltar aquí
+                      </div>
+                    )}
+
+                    {clubesEnCelda.map((club, idx) => {
+                      const color = COLORES_ETAPA[club.etapa] || COLORES_ETAPA['6-9 Años'];
+                      const ocupados = parseInt(conteoPorClub[club.cod_club]) || 0;
+                      const tieneCambio = !!cambiosPendientes[club.cod_club];
+
+                      return (
+                        <div
+                          key={`${club.cod_club}-${idx}`}
+                          draggable
+                          onDragStart={() => onDragStart(club, club._slot === club.horario1 ? 'horario1' : 'horario2')}
+                          onClick={() => setClubDetalle(club)}
+                          style={{
+                            background: color.bg,
+                            border: `1px solid ${tieneCambio ? '#f97316' : color.borde}`,
+                            borderRadius: 8, padding: '8px 10px',
+                            cursor: 'grab', fontSize: 12,
+                            position: 'relative',
+                            boxShadow: tieneCambio ? '0 0 0 2px rgba(249,115,22,0.4)' : 'none',
+                            transition: 'opacity 0.15s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                        >
+                          {/* Indicador de cambio pendiente */}
+                          {tieneCambio && (
+                            <div style={{
+                              position: 'absolute', top: 4, right: 4,
+                              width: 8, height: 8, borderRadius: '50%',
+                              background: '#f97316',
+                            }} />
+                          )}
+
+                          {/* Código del club */}
+                          <div style={{ fontWeight: 700, color: color.texto, fontSize: 12 }}>
+                            {club.cod_club}
+                          </div>
+
+                          {/* Etapa */}
+                          <div style={{ fontSize: 11, color: color.texto, opacity: 0.8 }}>
+                            {club.etapa}
+                          </div>
+
+                          {/* Oficial */}
+                          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                            {club.oficial || 'Sin oficial'}
+                          </div>
+
+                          {/* Ocupación */}
+                          <div style={{ marginTop: 4 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 2 }}>
+                              <span style={{ color: '#94a3b8' }}>{ocupados}/30</span>
+                            </div>
+                            <div style={{ height: 3, background: 'rgba(0,0,0,0.2)', borderRadius: 2 }}>
+                              <div style={{
+                                height: '100%',
+                                width: `${Math.min((ocupados / 30) * 100, 100)}%`,
+                                background: ocupados >= 30 ? '#ef4444' : ocupados >= 21 ? '#eab308' : '#22c55e',
+                                borderRadius: 2,
+                              }} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Modal de detalle de club ── */}
+      {clubDetalle && (
+        <div
+          onClick={() => setClubDetalle(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#1e293b', border: '1px solid #334155',
+              borderRadius: 16, padding: 24, maxWidth: 400, width: '100%',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 18, color: '#f97316' }}>{clubDetalle.cod_club}</h3>
+              <button onClick={() => setClubDetalle(null)}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 18 }}>
+                ✕
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <FilaDetalle label="Tipo"       valor={clubDetalle.nombre_club} />
+              <FilaDetalle label="Etapa"      valor={clubDetalle.etapa} />
+              <FilaDetalle label="Zona"       valor={clubDetalle.zona} />
+              <FilaDetalle label="Jornada"    valor={clubDetalle.jornada} />
+              <FilaDetalle label="PPS"        valor={`${clubDetalle.pps_abrev} — ${clubDetalle.pps_nombre}`} />
+              <FilaDetalle label="Horario 1"  valor={clubDetalle.horario1} />
+              <FilaDetalle label="Horario 2"  valor={clubDetalle.horario2} />
+              <FilaDetalle label="Oficial"    valor={clubDetalle.oficial} />
+              <FilaDetalle label="Participantes" valor={`${parseInt(conteoPorClub[clubDetalle.cod_club]) || 0}/30`} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal de confirmación de guardado ── */}
+      {mostrarConfirmacion && (
+        <div
+          onClick={() => setMostrarConfirmacion(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#1e293b', border: '1px solid #334155',
+              borderRadius: 16, padding: 24, maxWidth: 480, width: '100%',
+            }}
+          >
+            <h3 style={{ fontSize: 17, marginBottom: 8 }}>💾 Confirmar cambios de horario</h3>
+            <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>
+              Se guardarán los siguientes cambios en Google Sheets:
+            </p>
+
+            {/* Lista de cambios pendientes */}
+            <div style={{
+              maxHeight: 240, overflowY: 'auto', marginBottom: 16,
+              border: '1px solid #334155', borderRadius: 10,
+            }}>
+              {Object.entries(cambiosPendientes).map(([cod_club, cambios]) => (
+                <div key={cod_club} style={{
+                  padding: '10px 14px', borderBottom: '1px solid #334155', fontSize: 13,
+                }}>
+                  <strong style={{ color: '#f97316' }}>{cod_club}</strong>
+                  {cambios.horario1 && (
+                    <div style={{ color: '#94a3b8', fontSize: 12 }}>
+                      Horario 1 → <span style={{ color: '#e2e8f0' }}>{cambios.horario1}</span>
+                    </div>
+                  )}
+                  {cambios.horario2 && (
+                    <div style={{ color: '#94a3b8', fontSize: 12 }}>
+                      Horario 2 → <span style={{ color: '#e2e8f0' }}>{cambios.horario2}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn-primario" onClick={guardarCambios}
+                disabled={guardando} style={{ opacity: guardando ? 0.6 : 1 }}>
+                {guardando ? '⏳ Guardando...' : '✅ Confirmar y guardar'}
+              </button>
+              <button className="btn-secundario" onClick={() => setMostrarConfirmacion(false)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── FilaDetalle — fila de dato en el modal de detalle ──
+function FilaDetalle({ label, valor }) {
+  if (!valor) return null;
+  return (
+    <div style={{ display: 'flex', gap: 10 }}>
+      <span style={{ fontSize: 12, color: '#94a3b8', width: 100, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 13, color: '#e2e8f0' }}>{valor}</span>
+    </div>
+  );
+}
