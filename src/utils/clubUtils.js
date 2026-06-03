@@ -12,11 +12,52 @@
 // La zona propia tiene distancia 0. Las adyacentes, 1. Las lejanas, 2+.
 // Esto permite ordenar las recomendaciones por proximidad geográfica.
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// MAPA DE CERCANÍA ENTRE ZONAS — Actualizado con estructura real ASJ
+// Zona 1 (COL-J01): CCJ, Biblioteca distrital Santa Rosa           → ASJ101, ASJ102
+// Zona 2 (COL-J02): El Rancho, Iglesia El Faro, Rafael Canoles,    → ASJ203-ASJ206
+//                   Patio fresco
+// Zona 3 (COL-J03): I.E. Nuestra Señora del Carmen, Santa Rosa,    → ASJ307-ASJ310
+//                   Casa del Adulto Mayor, Bohio la Union
+// Zona 4 (COL-J04): Bohio 75 La torres, Inst. Moises Cabeza,       → ASJ411-ASJ415
+//                   Casa de Liliam, Casa de Sixta, Casa de Lucy
+// Zonas adyacentes geográficamente: 1↔2, 2↔3, 3↔4
+// ─────────────────────────────────────────────────────────────
 const DISTANCIA_ZONAS = {
   'COL-J01': { 'COL-J01': 0, 'COL-J02': 1, 'COL-J03': 2, 'COL-J04': 3 },
   'COL-J02': { 'COL-J01': 1, 'COL-J02': 0, 'COL-J03': 1, 'COL-J04': 2 },
   'COL-J03': { 'COL-J01': 2, 'COL-J02': 1, 'COL-J03': 0, 'COL-J04': 1 },
   'COL-J04': { 'COL-J01': 3, 'COL-J02': 2, 'COL-J03': 1, 'COL-J04': 0 },
+};
+
+// ─────────────────────────────────────────────────────────────
+// SECTORES POR ZONA — Mapeo real de PPS (lugares) por zona
+// Permite calcular cercanía dentro de la misma zona
+// ─────────────────────────────────────────────────────────────
+const SECTORES_POR_ZONA = {
+  'COL-J01': ['ASJ101', 'ASJ102'],
+  'COL-J02': ['ASJ203', 'ASJ204', 'ASJ205', 'ASJ206'],
+  'COL-J03': ['ASJ307', 'ASJ308', 'ASJ309', 'ASJ310'],
+  'COL-J04': ['ASJ411', 'ASJ412', 'ASJ413', 'ASJ414', 'ASJ415'],
+};
+
+// Nombres reales de los PPS por código
+export const NOMBRE_PPS = {
+  'ASJ101': 'CCJ',
+  'ASJ102': 'Biblioteca Distrital de Santa Rosa',
+  'ASJ203': 'El Rancho',
+  'ASJ204': 'Iglesia El Faro',
+  'ASJ205': 'Rafael Canoles Casa',
+  'ASJ206': 'Patio Fresco',
+  'ASJ307': 'I.E. Nuestra Señora del Carmen',
+  'ASJ308': 'I.E. Santa Rosa de Lima',
+  'ASJ309': 'Casa del Adulto Mayor',
+  'ASJ310': 'Bohio la Union',
+  'ASJ411': 'Bohio 75 La Torres',
+  'ASJ412': 'Institución Educativa Moises Cabeza Junco',
+  'ASJ413': 'Casa de Liliam',
+  'ASJ414': 'Casa de Sixta - Villas de Aranjuez',
+  'ASJ415': 'Casa de Lucy - Cañaveral',
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -150,4 +191,3 @@ export function buscarParticipantes(participantes, termino) {
     return campos.some(c => normalizarTexto(c).includes(t));
   });
 }
-
