@@ -16,11 +16,12 @@ import clubesData from './data/clubes.json';
 import BuscadorParticipante from './components/BuscadorParticipante';
 import PanelEstadisticas    from './components/PanelEstadisticas';
 import VistaClubes          from './components/VistaClubes';
+import VistaHorario         from './components/VistaHorario';
 import FormularioAgregar    from './components/FormularioAgregar';
 
 // ── URL de la API de Google Sheets (Apps Script) ──
 // Esta URL conecta la app con tu Google Sheets directamente
-const API_URL = "https://script.google.com/macros/s/AKfycbxbiCyAMQliEVzesyaloEByHzEOpM9kh2h8JTfrCrOVAVlN2xEIsaYeXE78H_FiuZfmjQ/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxHNFAX7UZrCTwExbWw7B6fiQ23t7Wgr3Hf9lvTDVvx3Okj0t_NzKesPSCpI6X7JDu-sQ/exec";
 
 // ── Definición de las pestañas de navegación ──
 const TABS = [
@@ -28,6 +29,7 @@ const TABS = [
   { id: 'agregar',     label: 'Agregar',              icono: '➕' },
   { id: 'estadisticas', label: 'Estadísticas',        icono: '📊' },
   { id: 'clubes',      label: 'Clubes',               icono: '🏫' },
+  { id: 'horario',     label: 'Horario',              icono: '📅' },
 ];
 
 export default function App() {
@@ -62,7 +64,7 @@ export default function App() {
         // Normalizar columnas del Sheets al formato que usa la app
         const normalizados = datos.map(p => ({
           codigo:       p["Código"]                        || p.codigo       || "",
-          nombre:       p["Nombre Completo"]               || p.nombre       || "",
+          nombre:       p[" Nombre Completo"]              || p["Nombre Completo"] || p.nombre || "",
           apellido:     p["Apellido del Participante"]     || p.apellido     || "",
           edad_actual:  p["Edad Actual"]                   || p.edad_actual  || "",
           edad_2026:    p["Edad 2026"]                     || p.edad_2026    || "",
@@ -170,6 +172,14 @@ export default function App() {
           />
         )}
 
+        {tabActivo === 'horario' && (
+          <VistaHorario
+            clubes={clubesData}
+            participantes={participantes}
+            apiUrl={API_URL}
+          />
+        )}
+
         {tabActivo === 'clubes' && (
           <VistaClubes
             clubes={clubesData}
@@ -180,3 +190,4 @@ export default function App() {
     </div>
   );
 }
+
