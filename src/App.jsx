@@ -17,11 +17,12 @@ import BuscadorParticipante from './components/BuscadorParticipante';
 import PanelEstadisticas    from './components/PanelEstadisticas';
 import VistaClubes          from './components/VistaClubes';
 import VistaHorario         from './components/VistaHorario';
+import VistaHistorial        from './components/VistaHistorial';
 import FormularioAgregar    from './components/FormularioAgregar';
 
 // ── URL de la API de Google Sheets (Apps Script) ──
 // Esta URL conecta la app con tu Google Sheets directamente
-const API_URL = "https://script.google.com/macros/s/AKfycbwEnuuf7DTrfPMO0OdicLFZ2Wxc9o0C3lp_4gOhv3KxJ3qXR_tHXAOsFcPky8lj0A084w/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxHNFAX7UZrCTwExbWw7B6fiQ23t7Wgr3Hf9lvTDVvx3Okj0t_NzKesPSCpI6X7JDu-sQ/exec";
 
 // ── Definición de las pestañas de navegación ──
 const TABS = [
@@ -30,6 +31,7 @@ const TABS = [
   { id: 'estadisticas', label: 'Estadísticas',        icono: '📊' },
   { id: 'clubes',      label: 'Clubes',               icono: '🏫' },
   { id: 'horario',     label: 'Horario',              icono: '📅' },
+  { id: 'historial',   label: 'Historial',            icono: '📋' },
 ];
 
 export default function App() {
@@ -170,6 +172,10 @@ export default function App() {
             participantes={participantes}
             clubes={clubesData}
           />
+        )}
+
+        {tabActivo === 'historial' && (
+          <VistaHistorial apiUrl={API_URL} />
         )}
 
         {tabActivo === 'horario' && (
