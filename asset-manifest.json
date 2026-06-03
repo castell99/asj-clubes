@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/asj-clubes/static/css/main.0dea8301.css",
-    "main.js": "/asj-clubes/static/js/main.1446c051.js",
+    "main.js": "/asj-clubes/static/js/main.f045a7ba.js",
     "index.html": "/asj-clubes/index.html",
     "main.0dea8301.css.map": "/asj-clubes/static/css/main.0dea8301.css.map",
-    "main.1446c051.js.map": "/asj-clubes/static/js/main.1446c051.js.map"
+    "main.f045a7ba.js.map": "/asj-clubes/static/js/main.f045a7ba.js.map"
   },
   "entrypoints": [
     "static/css/main.0dea8301.css",
-    "static/js/main.1446c051.js"
+    "static/js/main.f045a7ba.js"
   ]
 }
