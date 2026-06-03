@@ -1,43 +1,46 @@
 # ============================================================
 # deploy.yml — GitHub Actions
 # ============================================================
-# Este archivo se ejecuta automáticamente cada vez que
-# haces un cambio en la rama main.
+# Se ejecuta automáticamente con cada push a main.
 # Compila la app React y la publica en GitHub Pages.
 
 name: Desplegar en GitHub Pages
 
 on:
   push:
-    branches: [ main ]  # Se activa con cada push a main
+    branches: [ main ]
+
+# Permisos necesarios para publicar en GitHub Pages
+permissions:
+  contents: write
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Descargar el código del repositorio
+      # 1. Descargar el código
       - name: Descargar código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # 2. Instalar Node.js
+      # 2. Instalar Node.js 20
       - name: Instalar Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
-      # 3. Instalar dependencias del proyecto
+      # 3. Instalar dependencias
       - name: Instalar dependencias
         run: npm install
 
-      # 4. Compilar la app React para producción
+      # 4. Compilar la app
       - name: Compilar app
         run: npm run build
         env:
-          # Necesario para que las rutas funcionen en GitHub Pages
           PUBLIC_URL: /asj-clubes
+          CI: false
 
-      # 5. Publicar la carpeta build en GitHub Pages
+      # 5. Publicar en GitHub Pages
       - name: Publicar en GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
