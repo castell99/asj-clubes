@@ -295,5 +295,3 @@ export default function VistaClubes({ clubes, participantes }) {
     </div>
   );
 }
-}
-
