@@ -53,7 +53,8 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
   // Filtros activos
   const [filtroPPS,      setFiltroPPS]      = useState('');
   const [filtroZona,     setFiltroZona]     = useState('');
-  const [filtroOficial,  setFiltroOficial]  = useState('');
+  const [filtroOficial,     setFiltroOficial]     = useState('');
+  const [filtroFacilitador, setFiltroFacilitador] = useState('');
 
   // Bloques con cambios pendientes (antes de confirmar)
   // { cod_club: { horario1: nuevo, horario2: nuevo } }
@@ -82,7 +83,8 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
   // Valores únicos para filtros
   const ppsList   = useMemo(() => [...new Set(clubes.map(c => c.pps_abrev).filter(Boolean))].sort(), [clubes]);
   const zonas     = useMemo(() => [...new Set(clubes.map(c => c.zona).filter(Boolean))].sort(), [clubes]);
-  const oficiales = useMemo(() => [...new Set(participantes.map(p => p.oficial).filter(Boolean))].sort(), [participantes]);
+  const oficiales      = useMemo(() => [...new Set(participantes.map(p => p.oficial).filter(Boolean))].sort(), [participantes]);
+  const facilitadores  = useMemo(() => [...new Set(participantes.map(p => p.facilitador).filter(Boolean))].sort(), [participantes]);
 
   // ── Clubes con cambios aplicados (para mostrar en la grilla) ──
   const clubesActuales = useMemo(() => {
@@ -98,8 +100,11 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
     return clubesActuales.filter(c => {
       const matchPPS     = !filtroPPS     || c.pps_abrev === filtroPPS;
       const matchZona    = !filtroZona    || c.zona === filtroZona;
-      const matchOficial = !filtroOficial || c.oficial === filtroOficial;
-      return matchPPS && matchZona && matchOficial;
+      const matchOficial     = !filtroOficial     || c.oficial === filtroOficial;
+      // Filtro por facilitador: busca en los participantes del club
+      const matchFacilitador = !filtroFacilitador || 
+        participantes.some(p => p.cod_club === c.cod_club && p.facilitador === filtroFacilitador);
+      return matchPPS && matchZona && matchOficial && matchFacilitador;
     });
   }, [clubesActuales, filtroPPS, filtroZona, filtroOficial]);
 
@@ -260,9 +265,16 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
             {oficiales.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
 
-          {(filtroPPS || filtroZona || filtroOficial) && (
+          {/* Filtro por facilitador */}
+          <select className="input-base" style={{ width: 'auto', minWidth: 200 }}
+            value={filtroFacilitador} onChange={e => setFiltroFacilitador(e.target.value)}>
+            <option value="">Todos los facilitadores</option>
+            {facilitadores.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+
+          {(filtroPPS || filtroZona || filtroOficial || filtroFacilitador) && (
             <button className="btn-secundario" style={{ fontSize: 12, padding: '8px 14px' }}
-              onClick={() => { setFiltroPPS(''); setFiltroZona(''); setFiltroOficial(''); }}>
+              onClick={() => { setFiltroPPS(''); setFiltroZona(''); setFiltroOficial(''); setFiltroFacilitador(''); }}>
               ✕ Limpiar
             </button>
           )}
@@ -407,9 +419,14 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
                             {club.etapa}
                           </div>
 
-                          {/* Oficial */}
+                          {/* PPS — nombre del lugar */}
                           <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                            {club.oficial || 'Sin oficial'}
+                            📍 {club.pps_abrev || club.pps_nombre || ''}
+                          </div>
+
+                          {/* Oficial */}
+                          <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                            👤 {club.oficial || 'Sin oficial'}
                           </div>
 
                           {/* Ocupación */}
@@ -548,3 +565,4 @@ function FilaDetalle({ label, valor }) {
     </div>
   );
 }
+
