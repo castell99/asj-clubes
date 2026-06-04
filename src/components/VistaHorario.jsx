@@ -140,12 +140,17 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
       });
     });
 
-    // Ordenar horas por hora de inicio
+    // Ordenar horas por hora de inicio en formato 24h
+    // Convierte "1:30" → 90min, "8:30" → 510min, "13:30" → 810min
     const horasOrdenadas = [...horasSet].sort((a, b) => {
       const getMin = h => {
         const inicio = h.split('-')[0].trim();
         const [hh, mm] = inicio.split(':').map(Number);
-        return hh * 60 + (mm || 0);
+        // Si la hora es menor a 6, asumimos que es PM (ej: 1:30 → 13:30)
+        // Las jornadas AM están entre 6:00 y 12:00
+        // Las jornadas PM están entre 1:00 y 5:59
+        const hora24 = hh < 6 ? hh + 12 : hh;
+        return hora24 * 60 + (mm || 0);
       };
       return getMin(a) - getMin(b);
     });
