@@ -84,7 +84,19 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
   const ppsList   = useMemo(() => [...new Set(clubes.map(c => c.pps_abrev).filter(Boolean))].sort(), [clubes]);
   const zonas     = useMemo(() => [...new Set(clubes.map(c => c.zona).filter(Boolean))].sort(), [clubes]);
   const oficiales      = useMemo(() => [...new Set(participantes.map(p => p.oficial).filter(Boolean))].sort(), [participantes]);
-  const facilitadores  = useMemo(() => [...new Set(participantes.map(p => p.facilitador).filter(Boolean))].sort(), [participantes]);
+  // Separar facilitadores que vienen con "/" y generar lista única de todos
+  const facilitadores = useMemo(() => {
+    const todos = new Set();
+    participantes.forEach(p => {
+      if (!p.facilitador) return;
+      // Separar por "/" y limpiar espacios de cada nombre
+      p.facilitador.split('/').forEach(f => {
+        const nombre = f.trim();
+        if (nombre) todos.add(nombre);
+      });
+    });
+    return [...todos].sort();
+  }, [participantes]);
 
   // ── Clubes con cambios aplicados (para mostrar en la grilla) ──
   const clubesActuales = useMemo(() => {
@@ -101,9 +113,12 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
       const matchPPS     = !filtroPPS     || c.pps_abrev === filtroPPS;
       const matchZona    = !filtroZona    || c.zona === filtroZona;
       const matchOficial     = !filtroOficial     || c.oficial === filtroOficial;
-      // Filtro por facilitador: busca en los participantes del club
-      const matchFacilitador = !filtroFacilitador || 
-        participantes.some(p => p.cod_club === c.cod_club && p.facilitador === filtroFacilitador);
+      // Filtro por facilitador: separa por "/" y busca en cada nombre individual
+      const matchFacilitador = !filtroFacilitador ||
+        participantes.some(p =>
+          p.cod_club === c.cod_club &&
+          (p.facilitador || '').split('/').map(f => f.trim()).includes(filtroFacilitador)
+        );
       return matchPPS && matchZona && matchOficial && matchFacilitador;
     });
   }, [clubesActuales, filtroPPS, filtroZona, filtroOficial]);
