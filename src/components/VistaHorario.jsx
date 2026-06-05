@@ -50,11 +50,11 @@ function parsearHorario(horario) {
 //   - apiUrl: para guardar cambios en Google Sheets
 // ─────────────────────────────────────────────────────────────
 export default function VistaHorario({ clubes, participantes, apiUrl }) {
-  // Filtros activos
-  const [filtroPPS,      setFiltroPPS]      = useState('');
-  const [filtroZona,     setFiltroZona]     = useState('');
-  const [filtroOficial,     setFiltroOficial]     = useState('');
-  const [filtroFacilitador, setFiltroFacilitador] = useState('');
+  // Filtros activos — ahora son arrays para selección múltiple
+  const [filtroPPS,         setFiltroPPS]         = useState([]);
+  const [filtroZona,        setFiltroZona]        = useState([]);
+  const [filtroOficial,     setFiltroOficial]     = useState([]);
+  const [filtroFacilitador, setFiltroFacilitador] = useState([]);
 
   // Bloques con cambios pendientes (antes de confirmar)
   // { cod_club: { horario1: nuevo, horario2: nuevo } }
@@ -107,21 +107,24 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
     }));
   }, [clubes, cambiosPendientes]);
 
-  // ── Filtrar clubes ──
+  // ── Filtrar clubes — soporta selección múltiple (arrays) ──
   const clubesFiltrados = useMemo(() => {
     return clubesActuales.filter(c => {
-      const matchPPS     = !filtroPPS     || c.pps_abrev === filtroPPS;
-      const matchZona    = !filtroZona    || c.zona === filtroZona;
-      const matchOficial     = !filtroOficial     || c.oficial === filtroOficial;
-      // Filtro por facilitador: separa por "/" y busca en cada nombre individual
-      const matchFacilitador = !filtroFacilitador ||
-        participantes.some(p =>
-          p.cod_club === c.cod_club &&
-          (p.facilitador || '').split('/').map(f => f.trim()).includes(filtroFacilitador)
+      // Si el array está vacío, no hay filtro activo
+      const matchPPS     = filtroPPS.length === 0     || filtroPPS.includes(c.pps_abrev);
+      const matchZona    = filtroZona.length === 0    || filtroZona.includes(c.zona);
+      const matchOficial = filtroOficial.length === 0 || filtroOficial.includes(c.oficial);
+      // Facilitador: separa por "/" y verifica si alguno del array coincide
+      const matchFacilitador = filtroFacilitador.length === 0 ||
+        filtroFacilitador.some(filt =>
+          participantes.some(p =>
+            p.cod_club === c.cod_club &&
+            (p.facilitador || '').split('/').map(f => f.trim()).includes(filt)
+          )
         );
       return matchPPS && matchZona && matchOficial && matchFacilitador;
     });
-  }, [clubesActuales, filtroPPS, filtroZona, filtroOficial]);
+  }, [clubesActuales, filtroPPS, filtroZona, filtroOficial, filtroFacilitador, participantes]);
 
   // ── Construir grilla: { dia: { hora: [clubes] } } ──
   const grilla = useMemo(() => {
@@ -263,39 +266,43 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
           )}
         </div>
 
-        {/* Filtros */}
+        {/* Filtros múltiples */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <select className="input-base" style={{ width: 'auto', minWidth: 180 }}
-            value={filtroPPS} onChange={e => setFiltroPPS(e.target.value)}>
-            <option value="">Todos los PPS</option>
-            {ppsList.map(p => (
-              <option key={p} value={p}>{p} — {NOMBRE_PPS?.[p] || p}</option>
-            ))}
-          </select>
-
-          <select className="input-base" style={{ width: 'auto', minWidth: 150 }}
-            value={filtroZona} onChange={e => setFiltroZona(e.target.value)}>
-            <option value="">Todas las zonas</option>
-            {zonas.map(z => <option key={z} value={z}>{z}</option>)}
-          </select>
-
-          <select className="input-base" style={{ width: 'auto', minWidth: 180 }}
-            value={filtroOficial} onChange={e => setFiltroOficial(e.target.value)}>
-            <option value="">Todos los oficiales</option>
-            {oficiales.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-
-          {/* Filtro por facilitador */}
-          <select className="input-base" style={{ width: 'auto', minWidth: 200 }}
-            value={filtroFacilitador} onChange={e => setFiltroFacilitador(e.target.value)}>
+          <MultiSelect
+            label="PPS"
+            opciones={ppsList.map(p => ({ valor: p, etiqueta: `${p} — ${NOMBRE_PPS?.[p] || p}` }))}
+            seleccionados={filtroPPS}
+            onChange={setFiltroPPS}
+          />
+          <MultiSelect
+            label="Zona"
+            opciones={zonas.map(z => ({ valor: z, etiqueta: z }))}
+            seleccionados={filtroZona}
+            onChange={setFiltroZona}
+          />
+          <MultiSelect
+            label="Oficial"
+            opciones={oficiales.map(o => ({ valor: o, etiqueta: o }))}
+            seleccionados={filtroOficial}
+            onChange={setFiltroOficial}
+          />
+          <MultiSelect
+            label="Facilitador"
+            opciones={facilitadores.map(f => ({ valor: f, etiqueta: f }))}
+            seleccionados={filtroFacilitador}
+            onChange={setFiltroFacilitador}
+          />
+          {/* BLOQUE ELIMINADO — era el antiguo select de facilitador */}
+          {false && <select className="input-base" style={{ width: 'auto', minWidth: 200 }}
+            value={""} onChange={e => {}}>
             <option value="">Todos los facilitadores</option>
-            {facilitadores.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
+          </select>}
 
-          {(filtroPPS || filtroZona || filtroOficial || filtroFacilitador) && (
-            <button className="btn-secundario" style={{ fontSize: 12, padding: '8px 14px' }}
-              onClick={() => { setFiltroPPS(''); setFiltroZona(''); setFiltroOficial(''); setFiltroFacilitador(''); }}>
-              ✕ Limpiar
+          {/* Botón limpiar — aparece si hay algún filtro activo */}
+          {(filtroPPS.length > 0 || filtroZona.length > 0 || filtroOficial.length > 0 || filtroFacilitador.length > 0) && (
+            <button className="btn-secundario" style={{ fontSize: 12, padding: '8px 14px', alignSelf: 'flex-start', marginTop: 2 }}
+              onClick={() => { setFiltroPPS([]); setFiltroZona([]); setFiltroOficial([]); setFiltroFacilitador([]); }}>
+              ✕ Limpiar todo
             </button>
           )}
         </div>
@@ -586,3 +593,140 @@ function FilaDetalle({ label, valor }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// MultiSelect — Dropdown con checkboxes para selección múltiple
+// Props:
+//   - label: texto del botón cuando no hay selección
+//   - opciones: [{ valor, etiqueta }]
+//   - seleccionados: array de valores seleccionados
+//   - onChange: función que recibe el nuevo array
+// ─────────────────────────────────────────────────────────────
+function MultiSelect({ label, opciones, seleccionados, onChange }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = React.useRef(null);
+
+  // Cerrar al hacer clic fuera del dropdown
+  React.useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setAbierto(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  // Toggle de un valor individual
+  function toggleValor(valor) {
+    if (seleccionados.includes(valor)) {
+      onChange(seleccionados.filter(v => v !== valor));
+    } else {
+      onChange([...seleccionados, valor]);
+    }
+  }
+
+  const hay = seleccionados.length > 0;
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      {/* Botón principal del dropdown */}
+      <button
+        onClick={() => setAbierto(!abierto)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 14px', borderRadius: 10,
+          background: hay ? 'rgba(249,115,22,0.1)' : '#0f172a',
+          border: `1px solid ${hay ? '#f97316' : '#334155'}`,
+          color: hay ? '#f97316' : '#94a3b8',
+          cursor: 'pointer', fontSize: 13,
+          fontFamily: 'DM Sans, sans-serif',
+          whiteSpace: 'nowrap', minWidth: 140,
+        }}
+      >
+        <span style={{ flex: 1, textAlign: 'left' }}>
+          {hay
+            ? seleccionados.length === 1
+              ? seleccionados[0].length > 18 ? seleccionados[0].slice(0, 18) + '…' : seleccionados[0]
+              : `${label}: ${seleccionados.length} selec.`
+            : `Todos — ${label}`}
+        </span>
+        {/* Badge con cantidad */}
+        {hay && (
+          <span style={{
+            background: '#f97316', color: '#fff',
+            borderRadius: 20, padding: '1px 7px', fontSize: 11, fontWeight: 700,
+          }}>
+            {seleccionados.length}
+          </span>
+        )}
+        <span style={{ fontSize: 10 }}>{abierto ? '▲' : '▼'}</span>
+      </button>
+
+      {/* Dropdown con checkboxes */}
+      {abierto && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0,
+          marginTop: 6, zIndex: 200,
+          background: '#1e293b', border: '1px solid #334155',
+          borderRadius: 12, minWidth: 220, maxWidth: 300,
+          maxHeight: 280, overflowY: 'auto',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        }}>
+          {/* Opción "Seleccionar todos" */}
+          <div
+            onClick={() => onChange(seleccionados.length === opciones.length ? [] : opciones.map(o => o.valor))}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 14px', cursor: 'pointer', fontSize: 12,
+              borderBottom: '1px solid #334155', color: '#94a3b8',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <div style={{
+              width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+              border: `2px solid ${seleccionados.length === opciones.length ? '#f97316' : '#475569'}`,
+              background: seleccionados.length === opciones.length ? '#f97316' : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {seleccionados.length === opciones.length && <span style={{ color: '#fff', fontSize: 10 }}>✓</span>}
+            </div>
+            <span>Seleccionar todos</span>
+          </div>
+
+          {/* Lista de opciones con checkbox */}
+          {opciones.map(op => {
+            const activo = seleccionados.includes(op.valor);
+            return (
+              <div
+                key={op.valor}
+                onClick={() => toggleValor(op.valor)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 14px', cursor: 'pointer', fontSize: 13,
+                  background: activo ? 'rgba(249,115,22,0.07)' : 'transparent',
+                  borderBottom: '1px solid rgba(51,65,85,0.4)',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = activo ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.03)'}
+                onMouseLeave={e => e.currentTarget.style.background = activo ? 'rgba(249,115,22,0.07)' : 'transparent'}
+              >
+                {/* Checkbox visual */}
+                <div style={{
+                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                  border: `2px solid ${activo ? '#f97316' : '#475569'}`,
+                  background: activo ? '#f97316' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                }}>
+                  {activo && <span style={{ color: '#fff', fontSize: 10 }}>✓</span>}
+                </div>
+                {/* Etiqueta */}
+                <span style={{ color: activo ? '#f97316' : '#e2e8f0', lineHeight: 1.3 }}>
+                  {op.etiqueta}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
