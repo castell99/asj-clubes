@@ -459,9 +459,9 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
                             {club.etapa}
                           </div>
 
-                          {/* PPS — nombre del lugar */}
+                          {/* PPS — nombre completo del lugar */}
                           <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                            📍 {club.pps_abrev || club.pps_nombre || ''}
+                            📍 {NOMBRE_PPS?.[club.pps_abrev] || club.pps_nombre || club.pps_abrev || ''}
                           </div>
 
                           {/* Oficial */}
