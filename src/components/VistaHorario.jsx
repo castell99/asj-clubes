@@ -71,6 +71,19 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
   // Club seleccionado para ver detalle
   const [clubDetalle, setClubDetalle] = useState(null);
 
+  // Facilitador principal por club (primer nombre antes del "/")
+  const facilitadorPorClub = useMemo(() => {
+    const mapa = {};
+    participantes.forEach(p => {
+      if (!p.cod_club || !p.facilitador) return;
+      if (!mapa[p.cod_club]) {
+        // Tomar el primer facilitador (antes del "/")
+        mapa[p.cod_club] = p.facilitador.split('/')[0].trim();
+      }
+    });
+    return mapa;
+  }, [participantes]);
+
   // Conteo de participantes por club
   const conteoPorClub = useMemo(() => {
     const mapa = {};
@@ -455,6 +468,13 @@ export default function VistaHorario({ clubes, participantes, apiUrl }) {
                           <div style={{ fontSize: 11, color: '#94a3b8' }}>
                             👤 {club.oficial || 'Sin oficial'}
                           </div>
+
+                          {/* Facilitador principal */}
+                          {facilitadorPorClub[club.cod_club] && (
+                            <div style={{ fontSize: 11, color: '#60a5fa' }}>
+                              🎓 {facilitadorPorClub[club.cod_club]}
+                            </div>
+                          )}
 
                           {/* Ocupación */}
                           <div style={{ marginTop: 4 }}>
